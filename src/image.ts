@@ -76,35 +76,33 @@ export function binarize(
 }
 
 /**
- * エッジ検出（Sobel フィルタ）
- * Pillow の CONTOUR に近い結果を得るための実装
+ * エッジ検出（Laplacian フィルタ）
+ * 2次微分を使用した輪郭抽出
  */
 export function detectEdges(
   imageData: ImageData,
   opts: EdgeDetectOptions = {}
 ): ImageData {
-  const { strength = 1 } = opts;
+  const { strength = 1.5 } = opts;
   const width = imageData.width;
   const height = imageData.height;
   const data = imageData.data;
   const output = new Uint8ClampedArray(width * height * 4);
 
-  // Sobel フィルタのカーネル
-  const kernelX = [
-    [-1, 0, 1],
-    [-2, 0, 2],
-    [-1, 0, 1]
+  // Laplacian フィルタのカーネル
+  const kernel = [
+    [-1, -1, -1],
+    [-1,  8, -1],
+    [-1, -1, -1]
   ];
-  const kernelY = [
-    [-1, -2, -1],
-    [0, 0, 0],
-    [1, 2, 1]
-  ];
+
+  // 第1パス：最大値を計算してコントラストを強化
+  const magnitudes = new Array(width * height);
+  let maxMag = 0;
 
   for (let y = 1; y < height - 1; y++) {
     for (let x = 1; x < width - 1; x++) {
-      let px = 0;
-      let py = 0;
+      let sum = 0;
 
       // 3x3 の畳み込み
       for (let ky = 0; ky < 3; ky++) {
@@ -112,22 +110,31 @@ export function detectEdges(
           const idx = ((y + ky - 1) * width + (x + kx - 1)) * 4;
           // グレイスケール値を使用（RGBは同じ値）
           const v = data[idx];
-          px += v * kernelX[ky][kx];
-          py += v * kernelY[ky][kx];
+          sum += v * kernel[ky][kx];
         }
       }
 
-      // 勾配の大きさを計算
-      const mag = Math.min(255, Math.round(
-        Math.sqrt(px * px + py * py) * strength
-      ));
+      const mag = Math.abs(sum);
+      magnitudes[y * width + x] = mag;
+      maxMag = Math.max(maxMag, mag);
+    }
+  }
 
+  // 第2パス：正規化してコントラストを拡大
+  if (maxMag > 0) {
+    for (let y = 1; y < height - 1; y++) {
+      for (let x = 1; x < width - 1; x++) {
+        const mag = magnitudes[y * width + x];
+        // 正規化 + コントラスト強化
+        const normalized = (mag / maxMag) * 255 * strength;
+        const value = Math.min(255, Math.max(0, Math.round(normalized)));
 
-      const idx = (y * width + x) * 4;
-      output[idx] = mag;     // R
-      output[idx + 1] = mag; // G
-      output[idx + 2] = mag; // B
-      output[idx + 3] = 255; // A
+        const idx = (y * width + x) * 4;
+        output[idx] = value;     // R
+        output[idx + 1] = value; // G
+        output[idx + 2] = value; // B
+        output[idx + 3] = 255;   // A
+      }
     }
   }
 
