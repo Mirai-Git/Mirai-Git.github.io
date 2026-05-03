@@ -96,45 +96,51 @@ export function detectEdges(
     [-1, -1, -1]
   ];
 
-  // 第1パス：最大値を計算してコントラストを強化
-  const magnitudes = new Array(width * height);
+  // 各ピクセルの RGB ごとの強度を保持するバッファ
+  const magBuffer = new Float32Array(width * height * 3);
   let maxMag = 0;
 
+  // 第1パス：各チャンネルごとに畳み込みを行い、最大強度を探す
   for (let y = 1; y < height - 1; y++) {
     for (let x = 1; x < width - 1; x++) {
-      let sum = 0;
+      const baseIdx = (y * width + x) * 3;
 
-      // 3x3 の畳み込み
-      for (let ky = 0; ky < 3; ky++) {
-        for (let kx = 0; kx < 3; kx++) {
-          const idx = ((y + ky - 1) * width + (x + kx - 1)) * 4;
-          // グレイスケール値を使用（RGBは同じ値）
-          const v = data[idx];
-          sum += v * kernel[ky][kx];
+      for (let c = 0; c < 3; c++) { // R, G, B それぞれ計算
+        let sum = 0;
+        for (let ky = 0; ky < 3; ky++) {
+          for (let kx = 0; kx < 3; kx++) {
+            const pixelIdx = ((y + ky - 1) * width + (x + kx - 1)) * 4;
+            sum += data[pixelIdx + c] * kernel[ky][kx];
+          }
         }
+        
+        const mag = Math.abs(sum);
+        magBuffer[baseIdx + c] = mag;
+        if (mag > maxMag) maxMag = mag;
       }
-
-      const mag = Math.abs(sum);
-      magnitudes[y * width + x] = mag;
-      maxMag = Math.max(maxMag, mag);
     }
   }
 
-  // 第2パス：正規化してコントラストを拡大
-  if (maxMag > 0) {
-    for (let y = 1; y < height - 1; y++) {
-      for (let x = 1; x < width - 1; x++) {
-        const mag = magnitudes[y * width + x];
-        // 正規化 + コントラスト強化
-        const normalized = (mag / maxMag) * 255 * strength;
-        const value = Math.min(255, Math.max(0, Math.round(normalized)));
+  // 第2パス：正規化して出力配列に書き込む
+  for (let y = 0; y < height; y++) {
+    for (let x = 0; x < width; x++) {
+      const outIdx = (y * width + x) * 4;
+      const bufIdx = (y * width + x) * 3;
 
-        const idx = (y * width + x) * 4;
-        output[idx] = value;     // R
-        output[idx + 1] = value; // G
-        output[idx + 2] = value; // B
-        output[idx + 3] = 255;   // A
+      if (y === 0 || y === height - 1 || x === 0 || x === width - 1) {
+        // 端のピクセルは処理しない（または黒にする）
+        output[outIdx + 3] = 255;
+        continue;
       }
+
+      if (maxMag > 0) {
+        for (let c = 0; c < 3; c++) {
+          // 強度に基づいた正規化と strength の適用
+          const normalized = (magBuffer[bufIdx + c] / maxMag) * 255 * strength;
+          output[outIdx + c] = Math.min(255, Math.round(normalized));
+        }
+      }
+      output[outIdx + 3] = 255; // Alpha は常に不透明
     }
   }
 
