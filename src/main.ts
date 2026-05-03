@@ -220,7 +220,7 @@ class ImageProcessor {
             const options: EdgeDetectOptions = {
             strength: parseFloat(this.strengthSlider.value),
           };
-            const edges = detectEdges(grayImage,options);
+            const edges = detectEdges(this.originalImage!,options);
             const result = composite(binaryImage, edges, edges);
             this.ctx.putImageData(result, 0, 0);
           } else {
