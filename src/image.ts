@@ -83,7 +83,7 @@ export function detectEdges(
   imageData: ImageData,
   opts: EdgeDetectOptions = {}
 ): ImageData {
-  const { strength = 1.5 } = opts;
+  const { strength = 1.0 } = opts;
   const width = imageData.width;
   const height = imageData.height;
   const data = imageData.data;
